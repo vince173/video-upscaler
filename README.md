@@ -110,17 +110,26 @@ The compiled application will be in `src-tauri/target/release/bundle/`.
 
 ### Testing
 
-The project includes E2E tests using WebdriverIO and Playwright:
+The project includes E2E tests using WebdriverIO and Playwright.
+
+**Prerequisites for Windows:**
+- Microsoft Edge WebDriver (`msedgedriver.exe`) must be in your PATH
+- The `tauri-driver` package uses Edge WebDriver internally for Tauri E2E testing
+- You can install it via:
+  ```bash
+  # Download from: https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/
+  # Or run: winget install Microsoft.Edge.WebDriver
+  ```
 
 ```bash
-# Run all tests
-npm run test
+# Generate test video fixtures
+npm run test:fixtures
+
+# Run all E2E tests
+npm run test:e2e
 
 # Run tests in debug mode
 npm run test:e2e:debug
-
-# Generate test video fixtures
-npm run test:fixtures
 ```
 
 ### Adding New Languages
