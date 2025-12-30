@@ -1,0 +1,63 @@
+{
+  "language": "English",
+  "app": {
+    "title": "Video Quality Enhancer"
+  },
+  "header": {
+    "title": "Video Quality Enhancer"
+  },
+  "file_selection": {
+    "select_button": "Select Video File",
+    "selected_file": "Video file: {name}"
+  },
+  "tabs": {
+    "original": "Original Video",
+    "enhanced": "Enhanced Video"
+  },
+  "controls": {
+    "title": "Processing Settings",
+    "scale": "Scale Factor",
+    "quality": "Quality Preset",
+    "quality_ultra_fast": "Ultra Fast (lower quality)",
+    "quality_balanced": "Balanced (recommended)",
+    "quality_high_quality": "High Quality (slower)",
+    "hardware_encoder": "Hardware Encoder",
+    "encoder_none": "Software Encoding (CPU)",
+    "encoder_amd": "AMD AMF",
+    "encoder_nvidia": "NVIDIA NVENC",
+    "encoder_intel": "Intel QSV",
+    "generate_sample": "Generate 10-Second Sample",
+    "process_full": "Process Full Video"
+  },
+  "progress": {
+    "title": "Processing...",
+    "status_generating": "Generating 10-second sample...",
+    "status_processing": "Processing full video...",
+    "cancel_button": "Cancel Processing"
+  },
+  "errors": {
+    "title": "Error",
+    "no_file": "Please select a video file first",
+    "select_failed": "File selection failed: {error}",
+    "generate_failed": "Sample generation failed: {error}",
+    "process_failed": "Video processing failed: {error}",
+    "cancel_failed": "Cancellation failed: {error}",
+    "load_failed": "Failed to load video: {error}",
+    "no_enhanced": "Please generate an enhanced video first",
+    "delete_failed": "Failed to delete file: {error}"
+  },
+  "success": {
+    "title": "Processing Complete",
+    "file_location": "File Location:",
+    "open_folder": "Open Folder",
+    "close": "Close",
+    "sample_generated": "10-second sample generated successfully!",
+    "full_video_generated": "Full video processed successfully!"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "language_en": "English",
+    "language_zh": "中文"
+  }
+}

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Quality Enhancer</title>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+
+  <body>
+    <div class="app">
+      <!-- Header -->
+      <header class="header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <h1 data-i18n="header.title">📹 视频画质增强工具</h1>
+          <select id="language-select" class="language-select">
+            <option value="en">English</option>
+            <option value="zh">中文</option>
+          </select>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="main">
+        <!-- File Selection -->
+        <section class="card" id="file-section">
+          <input type="file" id="video-input" accept="video/*" style="display: none;" />
+          <button id="select-video-btn" class="btn btn-primary" data-i18n="file_selection.select_button">
+            📂 选择视频文件
+          </button>
+          <div id="selected-file" class="file-info"></div>
+        </section>
+
+        <!-- Video Player Section -->
+        <section class="card" id="player-section" style="display: none;">
+          <div class="video-tabs">
+            <button class="tab-btn active" data-tab="original" data-i18n="tabs.original">原始视频</button>
+            <button class="tab-btn" id="enhanced-tab-btn" data-tab="enhanced" style="display: none;" data-i18n="tabs.enhanced">增强视频</button>
+          </div>
+
+          <div class="video-container">
+            <video id="original-video" controls crossorigin="anonymous" style="width: 100%;"></video>
+            <video id="enhanced-video" controls crossorigin="anonymous" style="width: 100%; display: none;"></video>
+          </div>
+        </section>
+
+        <!-- Controls -->
+        <section class="card" id="controls-section" style="display: none;">
+          <h3 data-i18n="controls.title">处理设置</h3>
+
+          <div class="control-group">
+            <label data-i18n="controls.scale">缩放倍数:</label>
+            <select id="scale-select">
+              <option value="2">2x</option>
+              <option value="4" selected>4x</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label data-i18n="controls.quality">画质预设:</label>
+            <select id="quality-select">
+              <option value="ultra_fast" data-i18n="controls.quality_ultra_fast">极速 (较低画质)</option>
+              <option value="balanced" selected data-i18n="controls.quality_balanced">平衡 (推荐)</option>
+              <option value="high_quality" data-i18n="controls.quality_high_quality">高画质 (较慢)</option>
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label data-i18n="controls.hardware_encoder">硬件编码:</label>
+            <select id="encoder-select">
+              <option value="none" selected data-i18n="controls.encoder_none">软件编码 (CPU)</option>
+              <option value="amd" data-i18n="controls.encoder_amd">AMD AMF</option>
+              <option value="nvidia" data-i18n="controls.encoder_nvidia">NVIDIA NVENC</option>
+              <option value="intel" data-i18n="controls.encoder_intel">Intel QSV</option>
+            </select>
+          </div>
+
+          <div class="button-group">
+            <button id="generate-sample-btn" class="btn btn-secondary" data-i18n="controls.generate_sample">
+              ✨ 生成10秒样本
+            </button>
+            <button id="process-full-btn" class="btn btn-primary" data-i18n="controls.process_full">
+              🚀 处理完整视频
+            </button>
+          </div>
+        </section>
+
+        <!-- Progress Section -->
+        <section class="card" id="progress-section" style="display: none;">
+          <h3 data-i18n="progress.title">处理中...</h3>
+          <div class="progress-container">
+            <div class="progress-bar">
+              <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <div id="progress-text" class="progress-text">0%</div>
+          </div>
+          <div id="status-text" class="status-text" data-i18n="progress.status_processing">正在处理...</div>
+          <button id="cancel-btn" class="btn btn-danger" style="margin-top: 15px;" data-i18n="progress.cancel_button">
+            ❌ 取消处理
+          </button>
+        </section>
+
+        <!-- Error Section -->
+        <section class="card error-card" id="error-section" style="display: none;">
+          <h3 data-i18n="errors.title">❌ 错误</h3>
+          <p id="error-text"></p>
+        </section>
+
+        <!-- Success Section -->
+        <section class="card success-card" id="success-section" style="display: none;">
+          <h3 data-i18n="success.title">✅ 处理完成</h3>
+          <p class="success-message" id="success-message"></p>
+          <div class="file-info-box">
+            <p><strong data-i18n="success.file_location">文件位置:</strong></p>
+            <p id="success-file-path" class="file-path"></p>
+          </div>
+          <div class="button-group" style="margin-top: 15px;">
+            <button id="open-folder-btn" class="btn btn-secondary" data-i18n="success.open_folder">
+              📁 打开文件夹
+            </button>
+            <button id="close-success-btn" class="btn btn-primary" data-i18n="success.close">
+              关闭
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

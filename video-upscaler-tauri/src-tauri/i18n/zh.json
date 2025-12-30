@@ -1,0 +1,63 @@
+{
+  "language": "中文",
+  "app": {
+    "title": "视频画质增强工具"
+  },
+  "header": {
+    "title": "视频画质增强工具"
+  },
+  "file_selection": {
+    "select_button": "选择视频文件",
+    "selected_file": "视频文件: {name}"
+  },
+  "tabs": {
+    "original": "原始视频",
+    "enhanced": "增强视频"
+  },
+  "controls": {
+    "title": "处理设置",
+    "scale": "缩放倍数",
+    "quality": "画质预设",
+    "quality_ultra_fast": "极速 (较低画质)",
+    "quality_balanced": "平衡 (推荐)",
+    "quality_high_quality": "高画质 (较慢)",
+    "hardware_encoder": "硬件编码",
+    "encoder_none": "软件编码 (CPU)",
+    "encoder_amd": "AMD AMF",
+    "encoder_nvidia": "NVIDIA NVENC",
+    "encoder_intel": "Intel QSV",
+    "generate_sample": "生成10秒样本",
+    "process_full": "处理完整视频"
+  },
+  "progress": {
+    "title": "处理中...",
+    "status_generating": "正在生成10秒样本...",
+    "status_processing": "正在处理完整视频...",
+    "cancel_button": "取消处理"
+  },
+  "errors": {
+    "title": "错误",
+    "no_file": "请先选择视频文件",
+    "select_failed": "文件选择失败: {error}",
+    "generate_failed": "生成样本失败: {error}",
+    "process_failed": "处理视频失败: {error}",
+    "cancel_failed": "取消失败: {error}",
+    "load_failed": "加载视频失败: {error}",
+    "no_enhanced": "请先生成增强视频",
+    "delete_failed": "删除文件失败: {error}"
+  },
+  "success": {
+    "title": "处理完成",
+    "file_location": "文件位置:",
+    "open_folder": "打开文件夹",
+    "close": "关闭",
+    "sample_generated": "10秒样本生成成功!",
+    "full_video_generated": "完整视频处理成功!"
+  },
+  "settings": {
+    "title": "设置",
+    "language": "语言",
+    "language_en": "English",
+    "language_zh": "中文"
+  }
+}

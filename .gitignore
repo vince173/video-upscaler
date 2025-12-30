@@ -1,0 +1,35 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Rust target
+target/
+**/target/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Windows reserved names
+nul
+**/nul
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
+
+# Logs
+*.log
+
+# Test reports
+playwright-report/
+test-results/
