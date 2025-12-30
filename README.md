@@ -112,15 +112,6 @@ The compiled application will be in `src-tauri/target/release/bundle/`.
 
 The project includes E2E tests using WebdriverIO and Playwright.
 
-**Prerequisites for Windows:**
-- Microsoft Edge WebDriver (`msedgedriver.exe`) must be in your PATH
-- The `tauri-driver` package uses Edge WebDriver internally for Tauri E2E testing
-- You can install it via:
-  ```bash
-  # Download from: https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/
-  # Or run: winget install Microsoft.Edge.WebDriver
-  ```
-
 ```bash
 # Generate test video fixtures
 npm run test:fixtures
@@ -131,6 +122,17 @@ npm run test:e2e
 # Run tests in debug mode
 npm run test:e2e:debug
 ```
+
+**Platform-specific Requirements:**
+
+- **Windows**: Microsoft Edge WebDriver (`msedgedriver.exe`) must be in your PATH
+  - The `tauri-driver` package uses Edge WebDriver internally on Windows
+  - Install via: `winget install Microsoft.Edge.WebDriver`
+  - Or download from: https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver/
+
+- **Linux/macOS**: No additional WebDriver required (tauri-driver uses system APIs)
+
+**CI/CD**: GitHub Actions runs tests on all platforms (Windows, macOS, Linux) and automatically handles WebDriver installation on Windows.
 
 ### Adding New Languages
 
