@@ -1,30 +1,34 @@
 /**
  * WebdriverIO Configuration for Tauri E2E Testing
  *
- * This configuration:
- * 1. Builds the Tauri app
- * 2. Starts tauri-driver as a WebDriver server
- * 3. Runs tests against the Tauri window
+ * Based on @crabnebula/tauri-driver documentation:
+ * https://www.npmjs.com/package/@crabnebula/tauri-driver
  */
 
 import { spawn, spawnSync } from 'child_process';
 import path from 'path';
+import { waitTauriDriverReady } from '@crabnebula/tauri-driver';
 
 // Keep track of the tauri-driver child process
 let tauriDriver: ReturnType<typeof spawn>;
+let killedTauriDriver = false;
+
+// Set your application path
+// Note: npm run tauri build --debug builds in release folder, not debug
+const applicationPath = path.join(
+  process.cwd(),
+  'src-tauri',
+  'target',
+  'release',
+  process.platform === 'win32' ? 'video-upscaler-tauri.exe' : 'video-upscaler-tauri'
+);
 
 export const config: WebdriverIO.Config = {
   // ====================
-  // Runner Configuration
+  // WebDriver Connection
   // ====================
-  runner: 'local',
-  autoCompileOpts: {
-    autoCompile: true,
-    tsNodeOpts: {
-      project: '.',
-      transpileOnly: true,
-    },
-  },
+  hostname: '127.0.0.1',
+  port: 4444,
 
   // ====================
   // Test Files
@@ -37,24 +41,22 @@ export const config: WebdriverIO.Config = {
   // ====================
   // Capabilities
   // ====================
-  capabilities: [{
-    browserName: 'tauri',
-    'tauri:options': {
-      application: path.join(
-        process.cwd(),
-        'src-tauri',
-        'target',
-        'release',
-        process.platform === 'win32' ? 'video-upscaler-tauri.exe' : 'video-upscaler-tauri'
-      ),
+  maxInstances: 1,
+  capabilities: [
+    {
+      maxInstances: 1,
+      'tauri:options': {
+        application: applicationPath,
+      },
     },
-  }],
+  ],
 
   // ====================
   // Test Timeout
   // ====================
   waitforTimeout: 120000,
   connectionRetryTimeout: 120000,
+  connectionRetryCount: 0,
   frameworkTimeout: 300000,
 
   // ====================
@@ -72,78 +74,55 @@ export const config: WebdriverIO.Config = {
   // ====================
   reporters: [
     'spec',
-    ['junit', {
-      outputDir: './test-results/junit-results',
-      outputFileFormat: (options: { cid: string; capabilities: any }) => {
-        return `results-${options.cid}.xml`;
+    [
+      'junit',
+      {
+        outputDir: './test-results/junit-results',
+        outputFileFormat: (options: { cid: string; capabilities: any }) => {
+          return `results-${options.cid}.xml`;
+        },
       },
-    }],
+    ],
   ],
 
   // ====================
   // Automation Hooks
   // ====================
 
-  // Build the Tauri app before tests start
-  onPrepare: () => {
-    console.log('🔨 Building Tauri app in release mode...');
-    const result = spawnSync('cargo', ['build', '--release', '--manifest-path', 'src-tauri/Cargo.toml'], {
+  // Build the Tauri app (frontend + backend) for testing
+  // Using npm run tauri build ensures beforeBuildCommand runs
+  onPrepare: async () => {
+    // Build the Tauri app
+    spawnSync('npm', ['run', 'tauri', 'build', '--debug'], {
       stdio: 'inherit',
       shell: true,
     });
 
-    if (result.status !== 0) {
-      throw new Error('Failed to build Tauri app');
-    }
-    console.log('✅ Build complete');
-  },
-
-  // Start tauri-driver before the session
-  beforeSession: () => {
-    console.log('🚀 Starting tauri-driver...');
-
-    const tauriDriverPath = process.platform === 'win32'
-      ? 'tauri-driver.exe'
-      : 'tauri-driver';
-
-    tauriDriver = spawn(tauriDriverPath, [], {
-      stdio: ['ignore', 'pipe', 'pipe'],
+    // Start tauri-driver once for all tests
+    tauriDriver = spawn('tauri-driver', [], {
+      stdio: [null, process.stdout, process.stderr],
       shell: true,
     });
 
-    // Wait for tauri-driver to be ready
-    return new Promise<void>((resolve) => {
-      let ready = false;
-      const timeout = setTimeout(() => {
-        if (!ready) {
-          console.log('⏱️ tauri-driver timeout, assuming ready');
-          ready = true;
-          resolve();
-        }
-      }, 10000);
-
-      tauriDriver.stdout?.on('data', (data) => {
-        if (!ready && data.toString().includes('listening on')) {
-          console.log('✅ tauri-driver is ready');
-          ready = true;
-          clearTimeout(timeout);
-          resolve();
-        }
-      });
-
-      tauriDriver.stderr?.on('data', (data) => {
-        console.log('[tauri-driver stderr]', data.toString());
-      });
+    tauriDriver.on('error', (error) => {
+      console.error('tauri-driver error:', error);
+      process.exit(1);
     });
+
+    tauriDriver.on('exit', (code) => {
+      if (!killedTauriDriver) {
+        console.error('tauri-driver exited with code:', code);
+        process.exit(1);
+      }
+    });
+
+    // Wait for tauri-driver to initialize its proxy server
+    await waitTauriDriverReady();
   },
 
-  // Clean up tauri-driver after tests
-  afterSession: () => {
-    console.log('🛑 Stopping tauri-driver...');
-    if (tauriDriver) {
-      tauriDriver.kill();
-      console.log('✅ tauri-driver stopped');
-    }
+  // Clean up the `tauri-driver` process after all tests complete
+  onComplete: () => {
+    closeTauriDriver();
   },
 
   // ====================
@@ -155,7 +134,31 @@ export const config: WebdriverIO.Config = {
   // ====================
   // Additional Options
   // ====================
-  maxInstances: 1,
   bail: 0,
   screenshotPath: './test-results/screenshots',
 };
+
+function closeTauriDriver() {
+  killedTauriDriver = true;
+  tauriDriver?.kill();
+}
+
+function onShutdown(fn: () => void) {
+  const cleanup = () => {
+    try {
+      fn();
+    } finally {
+      process.exit(0);
+    }
+  };
+
+  process.on('exit', cleanup);
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
+  process.on('SIGHUP', cleanup);
+  process.on('SIGBREAK', cleanup);
+}
+
+onShutdown(() => {
+  closeTauriDriver();
+});

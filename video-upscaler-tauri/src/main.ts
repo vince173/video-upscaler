@@ -347,6 +347,7 @@ async function generateSample() {
 
   try {
     currentProcessingPath = outputPath;
+    console.log("[generateSample] Set currentProcessingPath to:", currentProcessingPath);
     isProcessing = true;
     showProgress(t("progress.status_generating"));
 
@@ -399,22 +400,23 @@ async function generateSample() {
     // Show success message with file path
     showSuccess(t("success.sample_generated", { path: result }), result, true);
   } catch (error) {
-    console.error("Failed to generate sample:", error);
-    isProcessing = false;
-    currentProcessingPath = null;
-    hideProgress();
+    console.error("[generateSample] Failed to generate sample:", error);
+    console.error("[generateSample] Error string:", String(error));
     // Check if it was a user cancellation
     if (String(error).includes("Processing cancelled")) {
-      // Cancel already handled by cancelProcessing() - just ensure state is reset
+      console.log("[generateSample] Detected cancellation - cancelProcessing already handled UI and cleanup");
+      // Cancel already handled by cancelProcessing() - just ensure buttons are enabled
       isProcessing = false;
-      currentProcessingPath = null;
-      // Don't call hideProgress() here - cancelProcessing() already handled the UI
-      // Just ensure buttons are re-enabled
       generateSampleBtn.disabled = false;
       processFullBtn.disabled = false;
       selectVideoBtn.disabled = false;
       return;
     } else {
+      // Not a cancellation - clean up and show error
+      console.log("[generateSample] Not a cancellation, showing error");
+      isProcessing = false;
+      currentProcessingPath = null;
+      hideProgress();
       showError(t("errors.generate_failed", { error: String(error) }));
     }
   }
@@ -436,6 +438,7 @@ async function processFullVideo() {
 
   try {
     currentProcessingPath = outputPath;
+    console.log("[processFullVideo] Set currentProcessingPath to:", currentProcessingPath);
     isProcessing = true;
     showProgress(t("progress.status_processing"));
 
@@ -491,22 +494,23 @@ async function processFullVideo() {
     // Show success message with file path
     showSuccess(t("success.full_video_generated", { path: result }), result, false);
   } catch (error) {
-    console.error("Failed to process full video:", error);
-    isProcessing = false;
-    currentProcessingPath = null;
-    hideProgress();
+    console.error("[processFullVideo] Failed to process full video:", error);
+    console.error("[processFullVideo] Error string:", String(error));
     // Check if it was a user cancellation
     if (String(error).includes("Processing cancelled")) {
-      // Cancel already handled by cancelProcessing() - just ensure state is reset
+      console.log("[processFullVideo] Detected cancellation - cancelProcessing already handled UI and cleanup");
+      // Cancel already handled by cancelProcessing() - just ensure buttons are enabled
       isProcessing = false;
-      currentProcessingPath = null;
-      // Don't call hideProgress() here - cancelProcessing() already handled the UI
-      // Just ensure buttons are re-enabled
       generateSampleBtn.disabled = false;
       processFullBtn.disabled = false;
       selectVideoBtn.disabled = false;
       return;
     } else {
+      // Not a cancellation - clean up and show error
+      console.log("[processFullVideo] Not a cancellation, showing error");
+      isProcessing = false;
+      currentProcessingPath = null;
+      hideProgress();
       showError(t("errors.process_failed", { error: String(error) }));
     }
   }
@@ -546,17 +550,6 @@ function hideProgress() {
   }, 1500);
 }
 
-// Immediately hide progress without showing 100% - for cancellation
-function hideProgressImmediate() {
-  // Re-enable buttons
-  generateSampleBtn.disabled = false;
-  processFullBtn.disabled = false;
-  selectVideoBtn.disabled = false;
-
-  // Hide immediately without showing 100%
-  progressSection.style.display = "none";
-}
-
 function showError(message: string) {
   errorSection.style.display = "block";
   errorText.textContent = message;
@@ -570,14 +563,26 @@ function showError(message: string) {
 }
 
 function showSuccess(message: string, filePath: string, isSample: boolean = false) {
+  console.log("[showSuccess] ENTER");
+  console.log("[showSuccess] filePath:", filePath);
+  console.log("[showSuccess] isSample:", isSample);
+
   successSection.style.display = "block";
   successMessage.textContent = message;
   successFilePath.textContent = filePath;
+  // Ensure file path and open folder button are visible
+  successFilePath.style.display = "block";
+  openFolderBtn.style.display = "block";
   progressSection.style.display = "none";
   errorSection.style.display = "none";
 
+  console.log("[showSuccess] AFTER setting - successFilePath.textContent:", successFilePath.textContent);
+  console.log("[showSuccess] AFTER setting - successFilePath.style.display:", successFilePath.style.display);
+  console.log("[showSuccess] AFTER setting - openFolderBtn.style.display:", openFolderBtn.style.display);
+
   // Track sample files for cleanup
   if (isSample && !sampleFiles.includes(filePath)) {
+    console.log("[showSuccess] Adding to sampleFiles:", filePath);
     sampleFiles.push(filePath);
   }
 
@@ -585,10 +590,57 @@ function showSuccess(message: string, filePath: string, isSample: boolean = fals
   generateSampleBtn.disabled = false;
   processFullBtn.disabled = false;
   selectVideoBtn.disabled = false;
+
+  console.log("[showSuccess] EXIT");
+}
+
+function showCancelled() {
+  console.log("[showCancelled] ENTER");
+
+  // Log current state BEFORE changes
+  console.log("[showCancelled] BEFORE - successFilePath.textContent:", successFilePath.textContent);
+  console.log("[showCancelled] BEFORE - successFilePath.style.display:", successFilePath.style.display);
+  console.log("[showCancelled] BEFORE - openFolderBtn.style.display:", openFolderBtn.style.display);
+
+  // Show success section with cancellation message (no file path)
+  successSection.style.display = "block";
+  successMessage.textContent = t("success.cancelled");
+
+  // Clear and hide file path row
+  console.log("[showCancelled] Clearing successFilePath.textContent");
+  successFilePath.textContent = "";
+  console.log("[showCancelled] AFTER content clearing - successFilePath.textContent:", successFilePath.textContent);
+
+  console.log("[showCancelled] Hiding successFilePath");
+  successFilePath.style.display = "none";
+
+  // Hide "Open Folder" button since there's no file
+  console.log("[showCancelled] Hiding openFolderBtn");
+  openFolderBtn.style.display = "none";
+
+  progressSection.style.display = "none";
+  errorSection.style.display = "none";
+
+  // Re-enable buttons
+  generateSampleBtn.disabled = false;
+  processFullBtn.disabled = false;
+  selectVideoBtn.disabled = false;
+
+  // Log final state AFTER changes
+  console.log("[showCancelled] AFTER - successFilePath.textContent:", successFilePath.textContent);
+  console.log("[showCancelled] AFTER - successFilePath.style.display:", successFilePath.style.display);
+  console.log("[showCancelled] AFTER - openFolderBtn.style.display:", openFolderBtn.style.display);
+
+  console.log("[showCancelled] EXIT");
 }
 
 async function cancelProcessing() {
+  console.log("[CANCEL] cancelProcessing() called");
+  console.log("[CANCEL] isProcessing:", isProcessing);
+  console.log("[CANCEL] currentProcessingPath:", currentProcessingPath);
+
   if (!isProcessing) {
+    console.log("[CANCEL] Early return - not processing");
     return;
   }
 
@@ -598,25 +650,44 @@ async function cancelProcessing() {
     progressText.textContent = "Cancelling...";
 
     // First, cancel the FFmpeg process
+    console.log("[CANCEL] About to call cancel_video_processing");
     await invoke("cancel_video_processing");
-    console.log("FFmpeg process cancelled");
+    console.log("[CANCEL] FFmpeg process cancelled");
+
+    // Wait a bit for FFmpeg to release the file handle
+    console.log("[CANCEL] Waiting 1 second for file handle release...");
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Then delete the partial output file if it exists
+    console.log("[CANCEL] Checking if currentProcessingPath exists for deletion...");
     if (currentProcessingPath) {
-      await invoke("delete_file", { path: currentProcessingPath });
-      console.log("Deleted partial file:", currentProcessingPath);
+      console.log("[CANCEL] Attempting to delete partial file:", currentProcessingPath);
+      try {
+        await invoke("delete_file", { path: currentProcessingPath });
+        console.log("[CANCEL] SUCCESS - Deleted partial file:", currentProcessingPath);
+      } catch (deleteError) {
+        console.error("[CANCEL] FAILED - Could not delete partial file:", currentProcessingPath);
+        console.error("[CANCEL] Deletion error:", deleteError);
+        // Don't show error to user for deletion failure - cancellation is still successful
+      }
+    } else {
+      console.log("[CANCEL] SKIP - No currentProcessingPath to delete");
     }
 
     // Reset state
+    console.log("[CANCEL] Resetting state - isProcessing to false, currentProcessingPath to null");
     isProcessing = false;
+    const pathBeforeNull = currentProcessingPath;
     currentProcessingPath = null;
 
-    // Hide progress immediately without showing 100%
-    hideProgressImmediate();
+    // Show cancellation success message
+    console.log("[CANCEL] About to call showCancelled()");
+    console.log("[CANCEL] pathBeforeNull (for logging):", pathBeforeNull);
+    showCancelled();
 
-    console.log("Processing cancelled");
+    console.log("[CANCEL] Processing cancelled complete");
   } catch (error) {
-    console.error("Error cancelling:", error);
+    console.error("[CANCEL] Error cancelling:", error);
     showError(t("errors.cancel_failed", { error: String(error) }));
     // Still re-enable buttons on error
     isProcessing = false;

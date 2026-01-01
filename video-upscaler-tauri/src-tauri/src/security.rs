@@ -161,11 +161,72 @@ pub fn validate_output_path(path: &Path) -> Result<PathBuf> {
 /// Validate that a path is safe for deletion
 ///
 /// Only allows deletion of files in temp directories, Downloads, or user-selected output locations
+/// Note: This function handles files that may not exist yet (partial files during cancellation)
 pub fn validate_deletion_path(path: &Path) -> Result<PathBuf> {
-    let canonical = validate_file_path(path)?;
+    println!("[validate_deletion_path] Input path: {:?}", path);
+    println!("[validate_deletion_path] Path exists: {}", path.exists());
 
-    // Additional check: only allow deletion from temp directories, Downloads, or user home
+    // Try to canonicalize the path directly first
+    let canonical = if path.exists() {
+        let c = path.canonicalize()
+            .map_err(|e| UpscalerError::ConfigError(format!("Invalid path: {}", e)))?;
+        println!("[validate_deletion_path] Canonicalized (file exists): {:?}", c);
+        c
+    } else {
+        // File doesn't exist yet - validate the parent directory instead
+        let parent = path.parent()
+            .ok_or_else(|| UpscalerError::ConfigError("Path has no parent directory".to_string()))?;
+
+        let canonical_parent = parent.canonicalize()
+            .map_err(|e| UpscalerError::ConfigError(format!("Invalid parent directory: {}", e)))?;
+
+        let file_name = path.file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| UpscalerError::ConfigError("Invalid file name".to_string()))?;
+
+        // Validate parent directory is within allowed locations
+        let parent_str = canonical_parent.to_string_lossy();
+
+        // Get temp directory
+        let temp_dir = std::env::temp_dir();
+        let temp_str = temp_dir.to_string_lossy().to_lowercase();
+
+        // Get user's home directory
+        let home_dir = dirs::home_dir();
+
+        println!("[validate_deletion_path] Parent: {:?}", parent_str);
+        println!("[validate_deletion_path] Temp: {:?}", temp_str);
+
+        let allowed = if let Some(home) = home_dir {
+            let home_str = home.to_string_lossy().to_lowercase();
+            println!("[validate_deletion_path] Home: {:?}", home_str);
+            parent_str.to_lowercase().starts_with(&home_str)
+                || parent_str.to_lowercase().starts_with(&temp_str)
+        } else {
+            parent_str.to_lowercase().starts_with(&temp_str)
+        };
+
+        println!("[validate_deletion_path] Allowed: {}", allowed);
+
+        if !allowed {
+            return Err(UpscalerError::ConfigError(
+                "File deletion not allowed from this location".to_string(),
+            ));
+        }
+
+        // Return the full path (parent + filename) for the actual deletion attempt
+        return Ok(canonical_parent.join(file_name));
+    };
+
+    // File exists - validate it's in an allowed location
     let path_str = canonical.to_string_lossy();
+
+    // Strip Windows extended-length path prefix (\\?\) for comparison
+    let path_str_for_comparison = if path_str.starts_with("\\\\?\\") {
+        &path_str[4..] // Skip the \\?\ prefix
+    } else {
+        &path_str
+    };
 
     // Get temp directory
     let temp_dir = std::env::temp_dir();
@@ -174,38 +235,20 @@ pub fn validate_deletion_path(path: &Path) -> Result<PathBuf> {
     // Get user's home directory
     let home_dir = dirs::home_dir();
 
-    // Get Downloads directory
-    #[cfg(target_os = "windows")]
-    let downloads_dir = std::path::PathBuf::from({
-        let home = home_dir.as_ref().map(|h| h.to_string_lossy().to_string()).unwrap_or_default();
-        let profile = if home.contains(":\\") {
-            // Windows: C:\Users\Username
-            home.clone()
-        } else {
-            home.clone()
-        };
-        format!("{}\\Downloads", profile)
-    });
-
-    #[cfg(not(target_os = "windows"))]
-    let downloads_dir = std::path::PathBuf::from({
-        let home = home_dir.as_ref().map(|h| h.to_string_lossy().to_string()).unwrap_or_default();
-        format!("{}/Downloads", home)
-    });
-
-    let downloads_str = downloads_dir.to_string_lossy().to_lowercase();
+    println!("[validate_deletion_path] Path (raw): {:?}", path_str);
+    println!("[validate_deletion_path] Path (for comparison): {:?}", path_str_for_comparison);
+    println!("[validate_deletion_path] Temp: {:?}", temp_str);
 
     let allowed = if let Some(home) = home_dir {
-        // Allow home directory and subdirectories, Downloads, and temp
         let home_str = home.to_string_lossy().to_lowercase();
-        path_str.to_lowercase().starts_with(&home_str)
-            || path_str.to_lowercase().starts_with(&temp_str)
-            || path_str.to_lowercase().starts_with(&downloads_str)
+        println!("[validate_deletion_path] Home: {:?}", home_str);
+        path_str_for_comparison.to_lowercase().starts_with(&home_str)
+            || path_str_for_comparison.to_lowercase().starts_with(&temp_str)
     } else {
-        // Fallback to temp and Downloads
-        path_str.to_lowercase().starts_with(&temp_str)
-            || path_str.to_lowercase().starts_with(&downloads_str)
+        path_str_for_comparison.to_lowercase().starts_with(&temp_str)
     };
+
+    println!("[validate_deletion_path] Allowed: {}", allowed);
 
     if !allowed {
         return Err(UpscalerError::ConfigError(

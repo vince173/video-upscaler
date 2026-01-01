@@ -39,6 +39,12 @@ thiserror = "1.0"
 # Image processing
 image = "0.25"
 
+# Path utilities
+dirs = "5.0"
+
+# URL encoding for file URIs
+urlencoding = "2.1"
+
 # Logging
 env_logger = "0.11"
 

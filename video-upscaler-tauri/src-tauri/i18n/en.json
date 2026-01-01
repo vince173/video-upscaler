@@ -53,7 +53,8 @@
     "open_folder": "Open Folder",
     "close": "Close",
     "sample_generated": "10-second sample generated successfully!",
-    "full_video_generated": "Full video processed successfully!"
+    "full_video_generated": "Full video processed successfully!",
+    "cancelled": "Processing cancelled successfully"
   },
   "settings": {
     "title": "Settings",

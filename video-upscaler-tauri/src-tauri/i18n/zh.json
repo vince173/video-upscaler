@@ -53,7 +53,8 @@
     "open_folder": "打开文件夹",
     "close": "关闭",
     "sample_generated": "10秒样本生成成功!",
-    "full_video_generated": "完整视频处理成功!"
+    "full_video_generated": "完整视频处理成功!",
+    "cancelled": "处理已成功取消"
   },
   "settings": {
     "title": "设置",

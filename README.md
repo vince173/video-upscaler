@@ -108,7 +108,7 @@ The compiled application will be in `src-tauri/target/release/bundle/`.
 | `npm run test:e2e:debug` | Run tests in debug mode |
 | `npm run test:fixtures` | Generate test video fixtures |
 
-### Testing
+### Testing (Currently Not Working!)
 
 The project includes E2E tests using WebdriverIO and Playwright.
 
