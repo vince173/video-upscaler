@@ -125,3 +125,4 @@ cargo fmt                  # Format code
 ## Development Guidelines
 
 - **Git operations**: ALWAYS ask for user permission before running `git commit`, `git push`, or any other git commands that modify the repository state or history. Never commit or push without explicit user confirmation.
+- **Search Before Code**: ALWAYS search the web before refactoring code to avoid hallucination.
