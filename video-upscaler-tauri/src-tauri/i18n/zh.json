@@ -33,6 +33,7 @@
     "title": "处理中...",
     "status_generating": "正在生成10秒样本...",
     "status_processing": "正在处理完整视频...",
+    "status_cancelling": "正在取消...",
     "cancel_button": "取消处理"
   },
   "errors": {

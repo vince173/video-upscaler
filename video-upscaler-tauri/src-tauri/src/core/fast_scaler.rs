@@ -5,10 +5,11 @@
 use crate::core::config::Config;
 use crate::error::{Result, UpscalerError};
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::{atomic::{AtomicBool, Ordering}, mpsc, OnceLock};
 use std::thread;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
+use std::sync::Mutex;
 
 use ffmpeg_sidecar::{
     command::FfmpegCommand,
@@ -19,8 +20,9 @@ use ffmpeg_sidecar::{
 /// Global cancellation flag
 static CANCELLATION_FLAG: OnceLock<AtomicBool> = OnceLock::new();
 
-/// Global FFmpeg child process ID for killing
-static FFMPEG_PID: OnceLock<std::sync::Mutex<Option<u32>>> = OnceLock::new();
+/// Global FFmpeg child process for killing
+/// We keep the Child wrapped in a Mutex for safe access across threads
+static FFMPEG_CHILD: OnceLock<Mutex<Option<Child>>> = OnceLock::new();
 
 /// Fast video scaler using FFmpeg
 pub struct FastScaler;
@@ -28,7 +30,8 @@ pub struct FastScaler;
 /// Progress callback type: sends (current_frame, total_frames, percentage)
 pub type ProgressCallback = Box<dyn Fn(usize, usize, f32) + Send + Sync>;
 
-/// Cancel any running FFmpeg process - actually kills it
+/// Cancel any running FFmpeg process
+/// First tries to send 'q' for graceful shutdown, then force kills if needed
 pub fn cancel_processing() -> bool {
     // Set the flag first
     if let Some(flag) = CANCELLATION_FLAG.get() {
@@ -36,12 +39,46 @@ pub fn cancel_processing() -> bool {
         println!("Cancellation flag set");
     }
 
-    // Try to kill the FFmpeg process by PID
-    if let Some(pid_guard) = FFMPEG_PID.get() {
-        if let Ok(mut guard) = pid_guard.try_lock() {
-            if let Some(pid) = guard.take() {
-                println!("Killing FFmpeg process PID {}...", pid);
-                // Kill the process using system command
+    // Try to gracefully terminate the FFmpeg process
+    if let Some(child_guard) = FFMPEG_CHILD.get() {
+        if let Ok(mut child_mutex) = child_guard.try_lock() {
+            if let Some(mut child) = child_mutex.take() {
+                println!("Attempting graceful FFmpeg shutdown...");
+
+                // Save PID before moving child into spawned thread
+                let pid = child.id();
+
+                // First, try to send 'q' to FFmpeg's stdin for graceful shutdown
+                let mut stdin = child.stdin.take();
+                let graceful_result = if let Some(ref mut stdin) = stdin {
+                    // Send 'q' followed by newline to request graceful shutdown
+                    let result = stdin.write_all(b"q\n");
+                    let _ = stdin.flush();
+                    result
+                } else {
+                    Ok(()) // No stdin available
+                };
+
+                if graceful_result.is_ok() {
+                    println!("Sent 'q' to FFmpeg for graceful shutdown");
+
+                    // Wait a bit for graceful shutdown to complete
+                    let _ = std::thread::sleep(std::time::Duration::from_millis(500));
+
+                    // Try to wait with timeout - child is moved into this closure
+                    let wait_result = std::thread::spawn(move || {
+                        child.wait()
+                    }).join();
+
+                    if let Ok(Ok(status)) = wait_result {
+                        println!("FFmpeg terminated gracefully: {:?}", status);
+                        return true;
+                    }
+
+                    println!("FFmpeg did not terminate gracefully, forcing...");
+                }
+
+                // Force kill the process using saved PID
                 #[cfg(target_os = "windows")]
                 {
                     let _ = Command::new("taskkill")
@@ -49,6 +86,7 @@ pub fn cancel_processing() -> bool {
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .spawn();
+                    println!("Sent taskkill for PID {}", pid);
                 }
                 #[cfg(not(target_os = "windows"))]
                 {
@@ -57,7 +95,10 @@ pub fn cancel_processing() -> bool {
                         .stdout(Stdio::null())
                         .stderr(Stdio::null())
                         .spawn();
+                    println!("Sent kill -9 for PID {}", pid);
                 }
+
+                println!("FFmpeg process terminated");
                 return true;
             }
         }
@@ -72,11 +113,11 @@ fn reset_cancellation() -> &'static AtomicBool {
     })
 }
 
-/// Clear the child process PID after completion
+/// Clear the child process after completion
 fn clear_child() {
-    if let Some(pid_guard) = FFMPEG_PID.get() {
-        if let Ok(mut pid) = pid_guard.try_lock() {
-            *pid = None;
+    if let Some(child_guard) = FFMPEG_CHILD.get() {
+        if let Ok(mut child) = child_guard.try_lock() {
+            *child = None;
         }
     }
 }
@@ -222,19 +263,25 @@ impl FastScaler {
         println!("[FFmpeg] Using FFmpeg at: {:?}", ffmpeg_path);
 
         // Build the command manually using the same logic as FfmpegCommand
-        let mut cmd_args = vec![
-            "-t".to_string(), config.preview_duration_secs.to_string(),
+        let mut cmd_args = vec![];
+
+        // Add preview duration limit BEFORE input (only if preview mode)
+        if config.preview_duration_secs > 0 {
+            cmd_args.extend(["-t".to_string(), config.preview_duration_secs.to_string()]);
+        }
+
+        cmd_args.extend([
             "-i".to_string(), input_path.to_string_lossy().to_string(),
             "-vf".to_string(), filters.clone(),
             "-c:v".to_string(), encoder.to_string(),
             "-an".to_string(),
-        ];
+        ]);
 
         // Add encoder-specific parameters
         if config.hardware_encoder == crate::core::config::HardwareEncoder::None {
             cmd_args.extend(["-preset".to_string(), preset.to_string()]);
             cmd_args.extend(["-crf".to_string(), crf.to_string()]);
-            cmd_args.extend(["-tune".to_string(), "faststart".to_string()]);
+            // Note: tune 'fastdecode' is valid for x264; 'faststart' is a movflag (added below)
         } else {
             let quality = match config.quality_preset {
                 crate::core::config::QualityPreset::UltraFast => "-1",
@@ -260,22 +307,30 @@ impl FastScaler {
         let cancel_flag = reset_cancellation();
         cancel_flag.store(false, Ordering::SeqCst);
 
+        // Initialize the global child storage if not already done
+        FFMPEG_CHILD.get_or_init(|| Mutex::new(None));
+
         // Spawn FFmpeg using std::process::Command
+        // Enable stdin for graceful shutdown via 'q' command
         let mut child = Command::new(&ffmpeg_path)
             .args(&cmd_args)
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| UpscalerError::FfmpegError(format!("Failed to spawn FFmpeg: {}", e)))?;
 
-        // Get the PID for cancellation
         let pid = child.id();
 
-        // Store PID globally for cancellation access
+        // Take stderr before storing child globally (we need it for parsing)
+        let stderr = child.stderr.take()
+            .ok_or_else(|| UpscalerError::FfmpegError("Failed to capture stderr".to_string()))?;
+
+        // Store the child globally for cancellation access (for graceful shutdown)
         {
-            if let Some(pid_guard) = FFMPEG_PID.get() {
-                if let Ok(mut guard) = pid_guard.try_lock() {
-                    *guard = Some(pid);
+            if let Some(child_guard) = FFMPEG_CHILD.get() {
+                if let Ok(mut guard) = child_guard.try_lock() {
+                    *guard = Some(child);
                 }
             }
         }
@@ -285,10 +340,6 @@ impl FastScaler {
         // Create channels for communication
         let (event_tx, event_rx) = mpsc::channel();
         let (done_tx, done_rx) = mpsc::channel();
-
-        // Get stderr handle for parsing
-        let stderr = child.stderr.take()
-            .ok_or_else(|| UpscalerError::FfmpegError("Failed to capture stderr".to_string()))?;
 
         // Calculate expected frames for preview mode
         let expected_frames_for_thread = expected_frames;
@@ -320,7 +371,23 @@ impl FastScaler {
                 }
             }
 
-            // Now wait for the child process to complete
+            // NOW retrieve the child from global storage for waiting
+            // (We keep it in global storage during parsing so cancel_processing can access it)
+            let child_opt = if let Some(child_guard) = FFMPEG_CHILD.get() {
+                child_guard.lock().unwrap().take()
+            } else {
+                None
+            };
+
+            let mut child = if let Some(c) = child_opt {
+                c
+            } else {
+                let _ = done_tx.send(Err("FFmpeg child process not found".to_string()));
+                clear_child();
+                return;
+            };
+
+            // Wait for the child process to complete
             println!("[FFmpeg] Waiting for process to exit...");
             match child.wait() {
                 Ok(status) => {

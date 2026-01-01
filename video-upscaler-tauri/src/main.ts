@@ -5,8 +5,6 @@ import { listen } from "@tauri-apps/api/event";
 // State
 let selectedFilePath: string | null = null;
 let enhancedVideoPath: string | null = null;
-let originalVideoObjectUrl: string | null = null;
-let enhancedVideoObjectUrl: string | null = null;
 let currentProcessingPath: string | null = null;
 let isProcessing = false;
 // Track sample files for cleanup
@@ -17,7 +15,6 @@ let currentLanguage: string = "en";
 let translations: Record<string, any> = {};
 
 // DOM Elements - will be initialized after DOM is ready
-let videoInput: HTMLInputElement;
 let selectVideoBtn: HTMLButtonElement;
 let selectedFileDiv: HTMLDivElement;
 let playerSection: HTMLDivElement;
@@ -45,7 +42,6 @@ let languageSelect: HTMLSelectElement;
 // Initialize
 window.addEventListener("DOMContentLoaded", async () => {
   // Initialize DOM elements
-  videoInput = document.getElementById("video-input") as HTMLInputElement;
   selectVideoBtn = document.getElementById("select-video-btn") as HTMLButtonElement;
   selectedFileDiv = document.getElementById("selected-file") as HTMLDivElement;
   playerSection = document.getElementById("player-section") as HTMLDivElement;
@@ -211,16 +207,6 @@ function setupEventListeners() {
   selectVideoBtn.addEventListener("click", async (e) => {
     console.log("Button clicked!", e);
     try {
-      // Test mode: check if a test file path was provided
-      if ((window as any).__tauri_test_file_path) {
-        const testPath = (window as any).__tauri_test_file_path;
-        console.log("Test mode: using file path:", testPath);
-        (window as any).__tauri_test_file_path = null; // Clear after use
-        selectedFilePath = testPath;
-        onFileSelected(testPath);
-        return;
-      }
-
       console.log("Calling open()...");
       const selected = await open({
         multiple: false,
@@ -294,8 +280,6 @@ async function onFileSelected(filePath: string) {
   try {
     // Convert file path to asset URL
     const assetUrl = await convertFileSrc(filePath);
-    originalVideoObjectUrl = assetUrl;
-
     console.log("Asset URL:", assetUrl);
 
     originalVideo.src = assetUrl;
@@ -326,20 +310,6 @@ async function onFileSelected(filePath: string) {
 
   // Switch to original tab
   switchTab("original");
-}
-
-// Helper function to get video MIME type
-function getVideoMimeType(filePath: string): string {
-  const ext = filePath.split('.').pop()?.toLowerCase();
-  const mimeTypes: { [key: string]: string } = {
-    'mp4': 'video/mp4',
-    'webm': 'video/webm',
-    'ogg': 'video/ogg',
-    'avi': 'video/x-msvideo',
-    'mov': 'video/quicktime',
-    'mkv': 'video/x-matroska'
-  };
-  return mimeTypes[ext || ''] || 'video/mp4';
 }
 
 function switchTab(tab: string) {
@@ -395,8 +365,6 @@ async function generateSample() {
 
     // Load enhanced video using convertFileSrc
     const assetUrl = await convertFileSrc(result);
-    enhancedVideoObjectUrl = assetUrl;
-
     console.log("Loading enhanced video from:", assetUrl);
 
     // Set up load handlers before setting src
@@ -435,7 +403,20 @@ async function generateSample() {
     isProcessing = false;
     currentProcessingPath = null;
     hideProgress();
-    showError(t("errors.generate_failed", { error: String(error) }));
+    // Check if it was a user cancellation
+    if (String(error).includes("Processing cancelled")) {
+      // Cancel already handled by cancelProcessing() - just ensure state is reset
+      isProcessing = false;
+      currentProcessingPath = null;
+      // Don't call hideProgress() here - cancelProcessing() already handled the UI
+      // Just ensure buttons are re-enabled
+      generateSampleBtn.disabled = false;
+      processFullBtn.disabled = false;
+      selectVideoBtn.disabled = false;
+      return;
+    } else {
+      showError(t("errors.generate_failed", { error: String(error) }));
+    }
   }
 }
 
@@ -476,8 +457,6 @@ async function processFullVideo() {
 
     // Load enhanced video using convertFileSrc
     const assetUrl = await convertFileSrc(result);
-    enhancedVideoObjectUrl = assetUrl;
-
     console.log("Loading enhanced video from:", assetUrl);
 
     // Set up load handlers before setting src
@@ -516,7 +495,20 @@ async function processFullVideo() {
     isProcessing = false;
     currentProcessingPath = null;
     hideProgress();
-    showError(t("errors.process_failed", { error: String(error) }));
+    // Check if it was a user cancellation
+    if (String(error).includes("Processing cancelled")) {
+      // Cancel already handled by cancelProcessing() - just ensure state is reset
+      isProcessing = false;
+      currentProcessingPath = null;
+      // Don't call hideProgress() here - cancelProcessing() already handled the UI
+      // Just ensure buttons are re-enabled
+      generateSampleBtn.disabled = false;
+      processFullBtn.disabled = false;
+      selectVideoBtn.disabled = false;
+      return;
+    } else {
+      showError(t("errors.process_failed", { error: String(error) }));
+    }
   }
 }
 
@@ -552,6 +544,17 @@ function hideProgress() {
   setTimeout(() => {
     progressSection.style.display = "none";
   }, 1500);
+}
+
+// Immediately hide progress without showing 100% - for cancellation
+function hideProgressImmediate() {
+  // Re-enable buttons
+  generateSampleBtn.disabled = false;
+  processFullBtn.disabled = false;
+  selectVideoBtn.disabled = false;
+
+  // Hide immediately without showing 100%
+  progressSection.style.display = "none";
 }
 
 function showError(message: string) {
@@ -590,6 +593,10 @@ async function cancelProcessing() {
   }
 
   try {
+    // Show cancellation message in progress briefly
+    statusText.textContent = t("progress.status_cancelling");
+    progressText.textContent = "Cancelling...";
+
     // First, cancel the FFmpeg process
     await invoke("cancel_video_processing");
     console.log("FFmpeg process cancelled");
@@ -604,11 +611,8 @@ async function cancelProcessing() {
     isProcessing = false;
     currentProcessingPath = null;
 
-    // Hide progress and re-enable buttons
-    progressSection.style.display = "none";
-    generateSampleBtn.disabled = false;
-    processFullBtn.disabled = false;
-    selectVideoBtn.disabled = false;
+    // Hide progress immediately without showing 100%
+    hideProgressImmediate();
 
     console.log("Processing cancelled");
   } catch (error) {

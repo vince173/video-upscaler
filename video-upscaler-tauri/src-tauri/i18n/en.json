@@ -33,6 +33,7 @@
     "title": "Processing...",
     "status_generating": "Generating 10-second sample...",
     "status_processing": "Processing full video...",
+    "status_cancelling": "Cancelling...",
     "cancel_button": "Cancel Processing"
   },
   "errors": {

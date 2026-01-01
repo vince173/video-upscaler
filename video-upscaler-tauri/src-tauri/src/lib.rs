@@ -1,11 +1,13 @@
 mod core;
 mod error;
 mod i18n;
+mod security;
 
 use crate::core::fast_scaler::FastScaler;
 use crate::core::config::{Config, HardwareEncoder, QualityPreset};
 use crate::error::Result;
 use crate::i18n::{Language, set_language, get_all_translations, save_language_preference};
+use crate::security::{validate_file_path, validate_output_path, validate_deletion_path, validate_video_file, sanitize_path_for_shell};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::sync::Once;
@@ -42,6 +44,16 @@ async fn process_video(
     // Ensure FFmpeg is initialized
     ensure_ffmpeg()?;
 
+    // SECURITY: Validate input path
+    let input = PathBuf::from(&input_path);
+    let validated_input = validate_video_file(&input)
+        .map_err(|e| format!("Input validation failed: {}", e))?;
+
+    // SECURITY: Validate output path (must be in user-accessible directory)
+    let output = PathBuf::from(&output_path);
+    let validated_output = validate_output_path(&output)
+        .map_err(|e| format!("Output validation failed: {}", e))?;
+
     // Create config
     let mut config = Config::new();
 
@@ -69,9 +81,6 @@ async fn process_video(
         config = config.with_hardware_encoder(encoder);
     }
 
-    let input = PathBuf::from(&input_path);
-    let output = PathBuf::from(&output_path);
-
     // Create progress callback that emits Tauri events
     let app_handle = Arc::new(app);
     let progress_callback = Some(Box::new(move |current: usize, total: usize, percentage: f32| {
@@ -83,7 +92,7 @@ async fn process_video(
     }) as crate::core::fast_scaler::ProgressCallback);
 
     // Process video
-    match FastScaler::process_video(&input, &output, &config, progress_callback) {
+    match FastScaler::process_video(&validated_input, &validated_output, &config, progress_callback) {
         Ok(_) => Ok(output_path),
         Err(e) => Err(e.to_string()),
     }
@@ -99,12 +108,19 @@ async fn generate_sample(
     // Ensure FFmpeg is initialized
     ensure_ffmpeg()?;
 
+    // SECURITY: Validate input path
+    let input = PathBuf::from(&input_path);
+    let validated_input = validate_video_file(&input)
+        .map_err(|e| format!("Input validation failed: {}", e))?;
+
+    // SECURITY: Validate output path (must be in user-accessible directory)
+    let output = PathBuf::from(&output_path);
+    let validated_output = validate_output_path(&output)
+        .map_err(|e| format!("Output validation failed: {}", e))?;
+
     let config = Config::new()
         .with_scale(4)
         .with_preview_duration(10); // 10 second sample
-
-    let input = PathBuf::from(&input_path);
-    let output = PathBuf::from(&output_path);
 
     // Create progress callback that emits Tauri events
     let app_handle = Arc::new(app);
@@ -116,7 +132,7 @@ async fn generate_sample(
         }));
     }) as crate::core::fast_scaler::ProgressCallback);
 
-    match FastScaler::process_video(&input, &output, &config, progress_callback) {
+    match FastScaler::process_video(&validated_input, &validated_output, &config, progress_callback) {
         Ok(_) => Ok(output_path),
         Err(e) => Err(e.to_string()),
     }
@@ -148,20 +164,23 @@ async fn delete_file(path: String) -> std::result::Result<(), String> {
     use crate::core::fast_scaler::cancel_processing;
     cancel_processing();
 
+    // SECURITY: Validate that the path is safe for deletion
     let file_path = PathBuf::from(&path);
+    let validated_path = validate_deletion_path(&file_path)
+        .map_err(|e| format!("Path validation failed: {}", e))?;
 
     // Try to delete the file with retries
     for attempt in 0..10 {
         // Check if file exists
-        if !file_path.exists() {
-            println!("File does not exist, skipping deletion: {}", path);
+        if !validated_path.exists() {
+            println!("File does not exist, skipping deletion");
             return Ok(());
         }
 
         // Try to delete
-        match fs::remove_file(&file_path) {
+        match fs::remove_file(&validated_path) {
             Ok(_) => {
-                println!("Deleted file: {}", path);
+                println!("Deleted file successfully");
                 return Ok(());
             }
             Err(e) if attempt < 9 => {
@@ -210,35 +229,48 @@ async fn get_available_languages() -> Vec<(String, String)> {
 /// Tauri command to open a file in its parent folder
 #[tauri::command]
 async fn open_in_folder(path: String) -> std::result::Result<(), String> {
+    use std::process::Command;
+
     let path_buf = PathBuf::from(&path);
 
+    // SECURITY: Validate that the path is safe
+    let validated_path = validate_file_path(&path_buf)
+        .map_err(|e| format!("Invalid path: {}", e))?;
+
     // Check if file exists
-    if !path_buf.exists() {
-        return Err(format!("File does not exist: {}", path));
+    if !validated_path.exists() {
+        return Err("File does not exist".to_string());
     }
 
     // Platform-specific commands to reveal file in folder
     #[cfg(target_os = "windows")]
     {
-        use std::process::Command;
+        // SECURITY: Use proper escaping for Windows explorer
+        // Pass /select and the path as separate args to avoid quoting issues
         Command::new("explorer")
-            .args(["/select,", &path])
+            .arg("/select,")
+            .arg(&validated_path)
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
     }
 
     #[cfg(target_os = "macos")]
     {
-        use std::process::Command;
+        // macOS open -R is safe with PathBuf as it passes args separately
         Command::new("open")
-            .args(["-R", &path])
+            .arg("-R")
+            .arg(&validated_path)
             .spawn()
             .map_err(|e| format!("Failed to open folder: {}", e))?;
     }
 
     #[cfg(target_os = "linux")]
     {
-        use std::process::Command;
+        // SECURITY: Use file:// URI with proper escaping
+        let path_str = validated_path.to_string_lossy();
+        // URL-encode the path for the URI
+        let encoded_path = urlencoding::encode(&path_str);
+
         // Try dbus call for file managers that support it (Nautilus, etc.)
         let dbus_result = Command::new("dbus-send")
             .args([
@@ -247,14 +279,14 @@ async fn open_in_folder(path: String) -> std::result::Result<(), String> {
                 "--type=method_call",
                 "/org/freedesktop/FileManager1",
                 "org.freedesktop.FileManager1.ShowItems",
-                format!("array:string:file://{}", path).as_str(),
+                &format!("array:string:file://{}", encoded_path),
                 "string:",
             ])
             .spawn();
 
         if dbus_result.is_err() {
             // Fallback to opening parent directory
-            if let Some(parent) = path_buf.parent() {
+            if let Some(parent) = validated_path.parent() {
                 Command::new("xdg-open")
                     .arg(parent)
                     .spawn()
@@ -275,14 +307,24 @@ async fn cleanup_temp_files(files: Vec<String>) -> std::result::Result<usize, St
 
     for file_path in files {
         let path = PathBuf::from(&file_path);
-        if path.exists() {
-            match fs::remove_file(&path) {
+
+        // SECURITY: Validate that the path is safe for deletion
+        let validated_path = match validate_deletion_path(&path) {
+            Ok(validated) => validated,
+            Err(e) => {
+                eprintln!("Failed to validate deletion path: {}", e);
+                continue;
+            }
+        };
+
+        if validated_path.exists() {
+            match fs::remove_file(&validated_path) {
                 Ok(_) => {
-                    println!("Deleted sample file: {}", file_path);
+                    println!("Deleted sample file successfully");
                     deleted_count += 1;
                 }
                 Err(e) => {
-                    eprintln!("Failed to delete sample file {}: {}", file_path, e);
+                    eprintln!("Failed to delete sample file: {}", e);
                 }
             }
         }
