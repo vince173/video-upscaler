@@ -5,11 +5,10 @@ mod security;
 
 use crate::core::fast_scaler::FastScaler;
 use crate::core::config::{Config, HardwareEncoder, QualityPreset};
-use crate::error::Result;
-use crate::i18n::{Language, set_language, get_all_translations, save_language_preference};
-use crate::security::{validate_file_path, validate_output_path, validate_deletion_path, validate_video_file, sanitize_path_for_shell};
+use crate::i18n::{Language, get_all_translations, save_language_preference};
+use crate::security::{validate_file_path, validate_output_path, validate_deletion_path, validate_video_file};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::Once;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 

@@ -300,7 +300,6 @@ impl FastScaler {
 
         cmd_args.extend(["-y".to_string(), output_path.to_string_lossy().to_string()]);
 
-        let start_time = std::time::Instant::now();
         let mut last_frame = 0;
 
         // Reset cancellation flag

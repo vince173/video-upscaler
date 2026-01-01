@@ -8,15 +8,6 @@ pub enum UpscalerError {
     #[error("Video decoding failed: {0}")]
     DecodingError(String),
 
-    #[error("Video encoding failed: {0}")]
-    EncodingError(String),
-
-    #[error("AI inference failed: {0}")]
-    InferenceError(String),
-
-    #[error("Model loading failed: {0}")]
-    ModelLoadError(String),
-
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 

@@ -1,13 +1,6 @@
 //! Configuration for video processing
 
-/// Processing mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProcessingMode {
-    /// Fast mode: FFmpeg scaling + sharpening (real-time speed)
-    Fast,
-}
-
-/// Quality/Speed preset for Fast mode
+/// Quality/Speed preset for video processing
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QualityPreset {
     /// Ultra fast: Lower quality, maximum speed (bicubic + ultrafast preset + CRF 23)
@@ -34,9 +27,7 @@ pub enum HardwareEncoder {
 /// Configuration for the video upscaler
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// Processing mode (Fast)
-    pub mode: ProcessingMode,
-    /// Quality preset for Fast mode (UltraFast/Balanced/HighQuality)
+    /// Quality preset (UltraFast/Balanced/HighQuality)
     pub quality_preset: QualityPreset,
     /// Hardware encoder to use (None/AMD/NVIDIA/Intel)
     pub hardware_encoder: HardwareEncoder,
@@ -51,7 +42,6 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            mode: ProcessingMode::Fast,
             quality_preset: QualityPreset::UltraFast,
             hardware_encoder: HardwareEncoder::None,
             scale: 4,
@@ -65,12 +55,6 @@ impl Config {
     /// Create a new config with default values
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Set the processing mode
-    pub fn with_mode(mut self, mode: ProcessingMode) -> Self {
-        self.mode = mode;
-        self
     }
 
     /// Set the quality preset
@@ -91,26 +75,9 @@ impl Config {
         self
     }
 
-    /// Set the output bitrate
-    pub fn with_bitrate(mut self, bitrate: u64) -> Self {
-        self.bitrate = bitrate;
-        self
-    }
-
     /// Set preview duration (0 = full video, 60 = 1 minute preview)
     pub fn with_preview_duration(mut self, secs: u64) -> Self {
         self.preview_duration_secs = secs;
         self
-    }
-
-    /// Validate the configuration
-    pub fn validate(&self) -> Result<(), String> {
-        if self.scale != 2 && self.scale != 4 {
-            return Err("Scale must be 2 or 4".to_string());
-        }
-        if self.bitrate == 0 {
-            return Err("Bitrate must be greater than 0".to_string());
-        }
-        Ok(())
     }
 }

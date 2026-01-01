@@ -25,14 +25,6 @@ impl Language {
         }
     }
 
-    /// Get the display name
-    pub fn display_name(&self) -> &'static str {
-        match self {
-            Language::English => "English",
-            Language::Chinese => "中文",
-        }
-    }
-
     /// Parse from language code
     pub fn from_code(code: &str) -> Option<Self> {
         match code {
@@ -101,64 +93,6 @@ fn get_translations(lang: Language) -> Result<Value, String> {
     Ok(translations)
 }
 
-/// Navigate a nested JSON value by dot-separated key path
-fn navigate_json<'a>(value: &'a Value, path: &str) -> Option<&'a Value> {
-    let parts: Vec<&str> = path.split('.').collect();
-    let mut current = value;
-
-    for part in parts {
-        match current {
-            Value::Object(map) => {
-                current = map.get(part)?;
-            }
-            _ => return None,
-        }
-    }
-
-    Some(current)
-}
-
-/// Translate a key with optional placeholder replacements
-///
-/// # Arguments
-/// * `key` - Dot-separated path to translation (e.g., "app.title")
-/// * `replacements` - Optional map of placeholder names to values
-///
-/// # Example
-/// ```rust
-/// translate("errors.no_file", None) // "Please select a video file first"
-/// translate("file_selection.selected_file", Some(map!("name" => "video.mp4")))
-/// // "Video file: video.mp4"
-/// ```
-pub fn translate(key: &str, replacements: Option<&HashMap<String, String>>) -> Result<String, String> {
-    // Get current language
-    let lang = {
-        let current = CURRENT_LANGUAGE.get_or_init(|| Mutex::new(Language::Chinese));
-        *current.lock().unwrap()
-    };
-
-    // Get translations
-    let translations = get_translations(lang)?;
-
-    // Navigate to the key
-    let value = navigate_json(&translations, key)
-        .ok_or_else(|| format!("Translation key not found: {}", key))?;
-
-    // Get string value
-    let mut text = value.as_str()
-        .ok_or_else(|| format!("Translation value is not a string: {}", key))?
-        .to_string();
-
-    // Apply replacements
-    if let Some(replacements) = replacements {
-        for (placeholder, value) in replacements {
-            text = text.replace(&format!("{{{{{}}}}}", placeholder), value);
-        }
-    }
-
-    Ok(text)
-}
-
 /// Set the current language
 pub fn set_language(lang: Language) -> Result<(), String> {
     // Pre-load translations to ensure they exist
@@ -173,11 +107,6 @@ pub fn set_language(lang: Language) -> Result<(), String> {
 pub fn get_language() -> Language {
     let current = CURRENT_LANGUAGE.get_or_init(|| Mutex::new(Language::Chinese));
     *current.lock().unwrap()
-}
-
-/// Get all available languages
-pub fn get_available_languages() -> Vec<Language> {
-    vec![Language::English, Language::Chinese]
 }
 
 /// Get all translations for the current language (for frontend)
