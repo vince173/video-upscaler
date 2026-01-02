@@ -163,14 +163,10 @@ pub fn validate_output_path(path: &Path) -> Result<PathBuf> {
 /// Only allows deletion of files in temp directories, Downloads, or user-selected output locations
 /// Note: This function handles files that may not exist yet (partial files during cancellation)
 pub fn validate_deletion_path(path: &Path) -> Result<PathBuf> {
-    println!("[validate_deletion_path] Input path: {:?}", path);
-    println!("[validate_deletion_path] Path exists: {}", path.exists());
-
     // Try to canonicalize the path directly first
     let canonical = if path.exists() {
         let c = path.canonicalize()
             .map_err(|e| UpscalerError::ConfigError(format!("Invalid path: {}", e)))?;
-        println!("[validate_deletion_path] Canonicalized (file exists): {:?}", c);
         c
     } else {
         // File doesn't exist yet - validate the parent directory instead
@@ -194,19 +190,13 @@ pub fn validate_deletion_path(path: &Path) -> Result<PathBuf> {
         // Get user's home directory
         let home_dir = dirs::home_dir();
 
-        println!("[validate_deletion_path] Parent: {:?}", parent_str);
-        println!("[validate_deletion_path] Temp: {:?}", temp_str);
-
         let allowed = if let Some(home) = home_dir {
             let home_str = home.to_string_lossy().to_lowercase();
-            println!("[validate_deletion_path] Home: {:?}", home_str);
             parent_str.to_lowercase().starts_with(&home_str)
                 || parent_str.to_lowercase().starts_with(&temp_str)
         } else {
             parent_str.to_lowercase().starts_with(&temp_str)
         };
-
-        println!("[validate_deletion_path] Allowed: {}", allowed);
 
         if !allowed {
             return Err(UpscalerError::ConfigError(
@@ -223,7 +213,7 @@ pub fn validate_deletion_path(path: &Path) -> Result<PathBuf> {
 
     // Strip Windows extended-length path prefix (\\?\) for comparison
     let path_str_for_comparison = if path_str.starts_with("\\\\?\\") {
-        &path_str[4..] // Skip the \\?\ prefix
+        path_str.get(4..).unwrap_or(&path_str)  // Safe fallback if slice is too short
     } else {
         &path_str
     };
@@ -235,20 +225,13 @@ pub fn validate_deletion_path(path: &Path) -> Result<PathBuf> {
     // Get user's home directory
     let home_dir = dirs::home_dir();
 
-    println!("[validate_deletion_path] Path (raw): {:?}", path_str);
-    println!("[validate_deletion_path] Path (for comparison): {:?}", path_str_for_comparison);
-    println!("[validate_deletion_path] Temp: {:?}", temp_str);
-
     let allowed = if let Some(home) = home_dir {
         let home_str = home.to_string_lossy().to_lowercase();
-        println!("[validate_deletion_path] Home: {:?}", home_str);
         path_str_for_comparison.to_lowercase().starts_with(&home_str)
             || path_str_for_comparison.to_lowercase().starts_with(&temp_str)
     } else {
         path_str_for_comparison.to_lowercase().starts_with(&temp_str)
     };
-
-    println!("[validate_deletion_path] Allowed: {}", allowed);
 
     if !allowed {
         return Err(UpscalerError::ConfigError(

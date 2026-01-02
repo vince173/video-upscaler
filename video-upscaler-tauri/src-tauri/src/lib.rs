@@ -159,42 +159,32 @@ async fn delete_file(path: String) -> std::result::Result<(), String> {
     use std::thread;
     use std::time::Duration;
 
-    println!("[delete_file] Attempting to delete: {}", path);
-
     // First cancel any running FFmpeg process
     use crate::core::fast_scaler::cancel_processing;
     cancel_processing();
 
     // SECURITY: Validate that the path is safe for deletion
     let file_path = PathBuf::from(&path);
-    println!("[delete_file] About to validate deletion path...");
     let validated_path = validate_deletion_path(&file_path)
         .map_err(|e| format!("Path validation failed: {}", e))?;
-
-    println!("[delete_file] Validated path: {:?}", validated_path);
-    println!("[delete_file] File exists: {}", validated_path.exists());
 
     // Try to delete the file with retries
     for attempt in 0..10 {
         // Check if file exists
         if !validated_path.exists() {
-            println!("[delete_file] File does not exist, skipping deletion");
             return Ok(());
         }
 
         // Try to delete
         match fs::remove_file(&validated_path) {
             Ok(_) => {
-                println!("[delete_file] Deleted file successfully");
                 return Ok(());
             }
-            Err(e) if attempt < 9 => {
+            Err(_e) if attempt < 9 => {
                 // File might still be in use by FFmpeg, wait and retry
-                println!("[delete_file] Delete attempt {} failed: {}, retrying...", attempt + 1, e);
                 thread::sleep(Duration::from_millis(500));
             }
             Err(e) => {
-                println!("[delete_file] Failed to delete file after 10 attempts: {}", e);
                 return Err(format!("Failed to delete file after 10 attempts: {}", e));
             }
         }
@@ -317,8 +307,7 @@ async fn cleanup_temp_files(files: Vec<String>) -> std::result::Result<usize, St
         // SECURITY: Validate that the path is safe for deletion
         let validated_path = match validate_deletion_path(&path) {
             Ok(validated) => validated,
-            Err(e) => {
-                eprintln!("Failed to validate deletion path: {}", e);
+            Err(_e) => {
                 continue;
             }
         };
@@ -326,11 +315,10 @@ async fn cleanup_temp_files(files: Vec<String>) -> std::result::Result<usize, St
         if validated_path.exists() {
             match fs::remove_file(&validated_path) {
                 Ok(_) => {
-                    println!("Deleted sample file successfully");
                     deleted_count += 1;
                 }
-                Err(e) => {
-                    eprintln!("Failed to delete sample file: {}", e);
+                Err(_) => {
+                    // Silently fail for cleanup operations
                 }
             }
         }

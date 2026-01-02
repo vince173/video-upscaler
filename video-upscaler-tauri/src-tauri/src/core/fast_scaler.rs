@@ -419,22 +419,7 @@ impl FastScaler {
                 return Err(UpscalerError::Cancelled);
             }
 
-            // Check if done signal received
-            match done_rx.try_recv() {
-                Ok(result) => {
-                    if let Err(e) = result {
-                        return Err(UpscalerError::FfmpegError(e));
-                    }
-                    break;
-                }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    // Channel disconnected but no error - check for any pending events
-                    break;
-                }
-                Err(mpsc::TryRecvError::Empty) => {}
-            }
-
-            // Try to receive events with timeout
+            // Try to receive events with timeout (checks both event_rx and done_rx)
             match event_rx.recv_timeout(std::time::Duration::from_millis(50)) {
                 Ok(event) => {
                     match event {
@@ -481,12 +466,42 @@ impl FastScaler {
                     }
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    // Event channel disconnected, break
-                    break;
+                    // Event channel disconnected, check done signal
+                    match done_rx.try_recv() {
+                        Ok(result) => {
+                            if let Err(e) = result {
+                                return Err(UpscalerError::FfmpegError(e));
+                            }
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            // Both channels disconnected - processing complete
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Empty) => {
+                            // done_rx empty but event_rx disconnected - should be done
+                            break;
+                        }
+                    }
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    // Timeout, check done signal and continue
-                    continue;
+                    // Timeout, check done signal
+                    match done_rx.try_recv() {
+                        Ok(result) => {
+                            if let Err(e) = result {
+                                return Err(UpscalerError::FfmpegError(e));
+                            }
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            // done_rx disconnected, should be complete
+                            break;
+                        }
+                        Err(mpsc::TryRecvError::Empty) => {
+                            // Neither channel has data, continue loop
+                            continue;
+                        }
+                    }
                 }
             }
         }
