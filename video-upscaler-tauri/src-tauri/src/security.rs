@@ -277,27 +277,6 @@ pub fn validate_video_file(path: &Path) -> Result<PathBuf> {
     Ok(canonical)
 }
 
-/// Sanitize a path string for safe use in shell commands
-///
-/// On Windows: properly quotes paths for use with explorer.exe
-/// On Unix: escapes special characters
-pub fn sanitize_path_for_shell(path: &Path) -> String {
-    #[cfg(target_os = "windows")]
-    {
-        // On Windows, wrap in quotes and escape existing quotes
-        let path_str = path.to_string_lossy().replace('\"', "\"\"");
-        format!("\"{}\"", path_str)
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        // On Unix, use shell escaping with single quotes
-        let path_str = path.to_string_lossy();
-        let escaped = path_str.replace('\'', "'\\''");
-        format!("'{}'", escaped)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,27 +285,5 @@ mod tests {
     fn test_validate_normal_file() {
         // This would need a real file to test, so we'll skip in unit tests
         // Integration tests should cover this
-    }
-
-    #[test]
-    fn test_sanitize_windows_path() {
-        #[cfg(target_os = "windows")]
-        {
-            let path = PathBuf::from(r"C:\Users\test\video.mp4");
-            let sanitized = sanitize_path_for_shell(&path);
-            assert!(sanitized.starts_with('"'));
-            assert!(sanitized.ends_with('"'));
-        }
-    }
-
-    #[test]
-    fn test_sanitize_unix_path() {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        {
-            let path = PathBuf::from("/home/user/video.mp4");
-            let sanitized = sanitize_path_for_shell(&path);
-            assert!(sanitized.starts_with('\''));
-            assert!(sanitized.ends_with('\''));
-        }
     }
 }

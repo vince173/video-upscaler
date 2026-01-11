@@ -33,8 +33,6 @@ pub struct Config {
     pub hardware_encoder: HardwareEncoder,
     /// Upscale factor (2, 4, etc.)
     pub scale: u32,
-    /// Output video quality (bitrate in bps)
-    pub bitrate: u64,
     /// Preview mode: process only first N seconds (0 = full video)
     pub preview_duration_secs: u64,
 }
@@ -45,7 +43,6 @@ impl Default for Config {
             quality_preset: QualityPreset::UltraFast,
             hardware_encoder: HardwareEncoder::None,
             scale: 4,
-            bitrate: 5_000_000,
             preview_duration_secs: 0,
         }
     }
